@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buddy Chatbot</title>
+<style>
+  :root {
+    --page: #e8edf5;
+    --ink: #1c2541;
+    --bot: #ffffff;
+    --user: #1c2541;
+    --user-text: #ffffff;
+    --accent: #f2b134;
+    --muted: #6b7691;
+    --line: #d3dbe9;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+  }
+  .chat {
+    width: 100%;
+    max-width: 520px;
+    height: min(720px, 100%);
+    background: #f7f9fc;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    background: var(--ink);
+    color: #fff;
+    padding: 16px 20px;
+  }
+  header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+  header p { margin: 4px 0 0; font-size: .85rem; color: #b9c3dd; }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+  .bot  { align-self: flex-start; background: var(--bot); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .user { align-self: flex-end; background: var(--user); color: var(--user-text); border-bottom-right-radius: 4px; }
+  .typing { color: var(--muted); font-style: italic; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 12px; }
+  .chips button {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: .85rem;
+    cursor: pointer;
+  }
+  .chips button:hover { border-color: var(--ink); }
+
+  .composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); background: #fff; }
+  .composer input {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 1rem;
+    color: var(--ink);
+  }
+  .composer button {
+    background: var(--accent);
+    color: var(--ink);
+    border: 0;
+    border-radius: 10px;
+    padding: 0 20px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  .composer button:disabled { opacity: .5; cursor: not-allowed; }
+  input:focus-visible, button:focus-visible { outline: 3px solid #4a67d6; outline-offset: 2px; }
+</style>
+</head>
+<body>
+  <main class="chat">
+    <header>
+      <h1>Buddy Chatbot</h1>
+      <p>Namaste! Basic sawal poochho. Exit ke liye "bye" likho.</p>
+    </header>
+
+    <div id="messages" aria-live="polite"></div>
+
+    <div class="chips" id="chips">
+      <button type="button">hello</button>
+      <button type="button">motivate me</button>
+      <button type="button">tell me a joke</button>
+      <button type="button">what time</button>
+      <button type="button">what is dsa</button>
+    </div>
+
+    <div class="composer">
+      <input id="input" type="text" placeholder="Apna sawal likho..." autocomplete="off" maxlength="300">
+      <button id="send" type="button">Send</button>
+    </div>
+  </main>
+
+<script>
+  const messagesEl = document.getElementById("messages");
+  const inputEl = document.getElementById("input");
+  const sendBtn = document.getElementById("send");
+
+  // Chat mein ek bubble add karta hai
+  function addMessage(text, who) {
+    const div = document.createElement("div");
+    div.className = "msg " + who;
+    div.textContent = text;   // textContent use kiya, innerHTML nahi (XSS se bachne ke liye)
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  // CONNECTIVITY: yahan frontend backend ko call karta hai
+  async function sendMessage(text) {
+    text = text.trim();
+    if (!text) return;
+
+    addMessage(text, "user");
+    inputEl.value = "";
+    sendBtn.disabled = true;
+
+    const typing = addMessage("Buddy likh raha hai...", "bot typing");
+
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text })
+      });
+
+      if (!res.ok) throw new Error("Server error " + res.status);
+
+      const data = await res.json();
+      typing.remove();
+      addMessage(data.reply, "bot");
+    } catch (err) {
+      typing.remove();
+      addMessage("Server se connect nahi ho paaya. Check karo ki app.py chal raha hai.", "bot");
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  sendBtn.addEventListener("click", () => sendMessage(inputEl.value));
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage(inputEl.value);
+  });
+  document.querySelectorAll("#chips button").forEach(b =>
+    b.addEventListener("click", () => sendMessage(b.textContent))
+  );
+
+  addMessage("Namaste! Main Buddy hoon. Kuch poochho ya 'help' likho.", "bot");
+</script>
+</body>
+</html>
